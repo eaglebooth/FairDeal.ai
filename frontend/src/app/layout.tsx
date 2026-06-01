@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { config } from "@/lib/wagmi";
+import { WagmiProvider } from "wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Navbar from "@/components/Navbar";
+import Web3Provider from "@/components/Web3Provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,26 +20,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FairDeal.ai -Autonomous AI Arbitration on GenLayer",
+  title: "FairDeal.ai - Autonomous AI Arbitration on GenLayer",
   description:
-    "Smart contracts that read the internet, analyze evidence with AI, and automatically resolve disputes -no lawyers, no middlemen, no waiting 30 days for a chargeback.",
-  keywords: [
-    "AI arbitration",
-    "GenLayer",
-    "smart contract",
-    "dispute resolution",
-    "e-commerce",
-    "freelance",
-    "blockchain",
-    "autonomous",
-    "web3",
-  ],
-  openGraph: {
-    title: "FairDeal.ai -Autonomous AI Arbitration on GenLayer",
-    description:
-      "Lock funds in escrow. Submit evidence URLs. AI validators reach consensus verdict. Smart contract auto-executes. Fair, fast, immutable.",
-    type: "website",
-  },
+    "Smart contracts that read the internet, analyze evidence with AI, and automatically resolve disputes - no lawyers, no middlemen, no waiting.",
 };
 
 export default function RootLayout({
@@ -43,9 +31,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrains.variable}`}
+    >
       <body className="antialiased">
-        {children}
+        <Web3Provider>
+          <Navbar />
+          {children}
+        </Web3Provider>
       </body>
     </html>
   );

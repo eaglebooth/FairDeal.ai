@@ -1,0 +1,143 @@
+import type { Abi } from "viem";
+
+const ABI: Abi = [
+  {
+    type: "function",
+    name: "create_arbitration_program",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "title", type: "string" },
+      { name: "description", type: "string" },
+      { name: "escrow_token", type: "string" },
+      { name: "arbitration_fee_pct", type: "uint256" },
+      { name: "challenge_window_blocks", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "close_program",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "program_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "get_program",
+    stateMutability: "view",
+    inputs: [{ name: "program_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "get_program_count",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "get_program_dispute_count",
+    stateMutability: "view",
+    inputs: [{ name: "program_id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "get_program_dispute",
+    stateMutability: "view",
+    inputs: [
+      { name: "program_id", type: "uint256" },
+      { name: "index", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "get_program_title",
+    stateMutability: "view",
+    inputs: [{ name: "program_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "get_program_status",
+    stateMutability: "view",
+    inputs: [{ name: "program_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "create_dispute",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "program_id", type: "uint256" },
+      { name: "plaintiff", type: "string" },
+      { name: "defendant", type: "string" },
+      { name: "contract_text_url", type: "string" },
+      { name: "plaintiff_evidence_urls", type: "string" },
+      { name: "defendant_evidence_urls", type: "string" },
+      { name: "dispute_type", type: "string" },
+      { name: "escrow_amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "submit_evidence",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "dispute_id", type: "uint256" },
+      { name: "party", type: "string" },
+      { name: "evidence_urls", type: "string" },
+    ],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "evaluate_dispute",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "dispute_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "execute_verdict",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "dispute_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "challenge_verdict",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "dispute_id", type: "uint256" },
+      { name: "reason", type: "string" },
+    ],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "get_dispute",
+    stateMutability: "view",
+    inputs: [{ name: "dispute_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "get_dispute_count",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "get_dispute_status",
+    stateMutability: "view",
+    inputs: [{ name: "dispute_id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+] as const;
+
+export { ABI };

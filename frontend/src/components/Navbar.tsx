@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
+import WalletButton from "@/components/WalletButton";
 
 const NAV_LINKS = [
   { label: "How It Works", href: "#how-it-works" },
@@ -58,14 +59,9 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* CTA */}
+        {/* CTA / Wallet */}
         <div className="hidden md:block">
-          <button
-            onClick={() => scrollTo("#cta")}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-accent-blue to-accent-purple text-white hover:shadow-lg hover:shadow-accent-blue/25 transition-shadow"
-          >
-            Launch App
-          </button>
+          <WalletButton />
         </div>
 
         {/* Mobile toggle */}
@@ -91,12 +87,9 @@ export default function Navbar() {
                 {l.label}
               </button>
             ))}
-            <button
-              onClick={() => scrollTo("#cta")}
-              className="mt-2 px-5 py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-accent-blue to-accent-purple text-white"
-            >
-              Launch App
-            </button>
+            <div className="mt-2">
+              <WalletButton />
+            </div>
           </div>
         </div>
       )}
