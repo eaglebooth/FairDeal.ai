@@ -36,6 +36,9 @@ class FairDeal(gl.Contract):
     dispute_challenge_deadlines: TreeMap[u256, u256]
     dispute_count: u256
 
+    # ── Challenge Panel ───────────────────────────────────────────────────
+    dispute_panel_verdicts: TreeMap[u256, str]
+
     # ── Treasury / Execution Ledger ───────────────────────────────────────
     treasury_recipients: DynArray[str]
     treasury_amounts: DynArray[u256]
@@ -144,8 +147,6 @@ class FairDeal(gl.Contract):
         plaintiff: str,
         defendant: str,
         contract_text_url: str,
-        plaintiff_evidence_urls: str,
-        defendant_evidence_urls: str,
         dispute_type: str,
         escrow_amount: u256,
     ) -> typing.Any:
@@ -170,8 +171,8 @@ class FairDeal(gl.Contract):
         self.dispute_plaintiffs[dispute_id] = plaintiff
         self.dispute_defendants[dispute_id] = defendant
         self.dispute_contract_text_urls[dispute_id] = contract_text_url
-        self.dispute_p_evidence_urls[dispute_id] = plaintiff_evidence_urls
-        self.dispute_d_evidence_urls[dispute_id] = defendant_evidence_urls
+        self.dispute_p_evidence_urls[dispute_id] = "[]"
+        self.dispute_d_evidence_urls[dispute_id] = "[]"
         self.dispute_types[dispute_id] = dispute_type
         self.dispute_escrow_amounts[dispute_id] = escrow_amount
         self.dispute_statuses[dispute_id] = "PENDING"
@@ -205,15 +206,13 @@ class FairDeal(gl.Contract):
         if status != "PENDING" and status != "EVIDENCE_SUBMITTED":
             return "CANNOT_SUBMIT_EVIDENCE"
         if party == self.dispute_plaintiffs[dispute_id]:
-            existing = self.dispute_p_evidence_urls[dispute_id]
-            self.dispute_p_evidence_urls[dispute_id] = (
-                existing + "," + evidence_urls if len(existing) > 0 else evidence_urls
-            )
+            existing_list = json.loads(self.dispute_p_evidence_urls[dispute_id]) if self.dispute_p_evidence_urls[dispute_id] else []
+            existing_list.append(evidence_urls)
+            self.dispute_p_evidence_urls[dispute_id] = json.dumps(existing_list, sort_keys=True, separators=(",", ":"))
         elif party == self.dispute_defendants[dispute_id]:
-            existing = self.dispute_d_evidence_urls[dispute_id]
-            self.dispute_d_evidence_urls[dispute_id] = (
-                existing + "," + evidence_urls if len(existing) > 0 else evidence_urls
-            )
+            existing_list = json.loads(self.dispute_d_evidence_urls[dispute_id]) if self.dispute_d_evidence_urls[dispute_id] else []
+            existing_list.append(evidence_urls)
+            self.dispute_d_evidence_urls[dispute_id] = json.dumps(existing_list, sort_keys=True, separators=(",", ":"))
         else:
             return "NOT_A_PARTY"
         self.dispute_statuses[dispute_id] = "EVIDENCE_SUBMITTED"
@@ -282,6 +281,8 @@ class FairDeal(gl.Contract):
         dispute_type = self.dispute_types[dispute_id]
         escrow_amount = self.dispute_escrow_amounts[dispute_id]
         program_id = self.dispute_program_ids[dispute_id]
+        if self.program_statuses[program_id] != "ACTIVE":
+            return "PROGRAM_NOT_ACTIVE"
         fee_pct = self.program_arbitration_fee_pcts[program_id]
         challenge_blocks = self.program_challenge_window_blocks[program_id]
 
@@ -410,8 +411,6 @@ class FairDeal(gl.Contract):
         status = self.dispute_statuses[dispute_id]
         if status != "VERDICT_REACHED":
             return "NO_VERDICT"
-        if self.dispute_challenge_deadlines[dispute_id] != u256(0):
-            return "CHALLENGE_PENDING"
 
         verdict_raw = self.dispute_verdicts[dispute_id]
         try:
@@ -491,6 +490,146 @@ class FairDeal(gl.Contract):
             return "EMPTY_REASON"
         self.dispute_statuses[dispute_id] = "CHALLENGED"
         return "CHALLENGE_REGISTERED"
+
+    @gl.public.write
+    def resolve_challenge(self, dispute_id: u256) -> typing.Any:
+        if dispute_id >= self.dispute_count:
+            return "INVALID_DISPUTE_ID"
+        status = self.dispute_statuses[dispute_id]
+        if status != "CHALLENGED":
+            return "NOT_IN_CHALLENGE"
+
+        verdict_raw = self.dispute_verdicts[dispute_id]
+        try:
+            original_verdict = json.loads(verdict_raw)
+        except Exception:
+            return "INVALID_ORIGINAL_VERDICT"
+
+        contract_url = self.dispute_contract_text_urls[dispute_id]
+        p_urls_raw = self.dispute_p_evidence_urls[dispute_id]
+        d_urls_raw = self.dispute_d_evidence_urls[dispute_id]
+        p_evidence_urls = json.loads(p_urls_raw) if p_urls_raw else []
+        d_evidence_urls = json.loads(d_urls_raw) if d_urls_raw else []
+        plaintiff = self.dispute_plaintiffs[dispute_id]
+        defendant = self.dispute_defendants[dispute_id]
+        dispute_type = self.dispute_types[dispute_id]
+        escrow_amount = self.dispute_escrow_amounts[dispute_id]
+        program_id = self.dispute_program_ids[dispute_id]
+        fee_pct = self.program_arbitration_fee_pcts[program_id]
+
+        def truncate(text, limit):
+            if len(text) > limit:
+                return text[:limit]
+            return text
+
+        def fetch_evidence(urls, label):
+            sections = []
+            for idx, url in enumerate(urls):
+                if len(url) > 0:
+                    try:
+                        r = gl.nondet.web.get(url)
+                        body = r.body.decode("utf-8")
+                        sections.append(f"=== {label} Evidence {idx+1} ({url}) ===\n{truncate(body, 4000)}")
+                    except Exception:
+                        sections.append(f"=== {label} Evidence {idx+1} ({url}) === [FETCH_FAILED]")
+            return "\n\n".join(sections)
+
+        def panelist_1() -> str:
+            p_block = fetch_evidence(p_evidence_urls, "Plaintiff")
+            d_block = fetch_evidence(d_evidence_urls, "Defendant")
+            prompt = (
+                "You are a senior arbitrator on FairDeal.ai reviewing a challenged verdict.\n\n"
+                "=== DISPUTE ===\n"
+                f"Type: {dispute_type}\n"
+                f"Escrow: {int(escrow_amount)} tokens\n"
+                f"Plaintiff: {plaintiff}\n"
+                f"Defendant: {defendant}\n\n"
+                f"=== CONTRACT ===\n{contract_url}\n\n"
+                f"=== PLAINTIFF EVIDENCE ===\n{p_block}\n\n"
+                f"=== DEFENDANT EVIDENCE ===\n{d_block}\n\n"
+                f"=== ORIGINAL VERDICT ===\n{verdict_raw}\n\n"
+                "=== INSTRUCTIONS ===\n"
+                "Review all materials and the original verdict. Decide whether to uphold or replace it.\n"
+                "Respond with ONLY this JSON:\n"
+                '{"agree": true|false, "new_verdict": <full verdict JSON if disagree, else null>, "reason": "<1-3 sentences>"}\n'
+            )
+            return gl.nondet.exec_prompt(prompt)
+
+        def panelist_2() -> str:
+            p_block = fetch_evidence(p_evidence_urls, "Plaintiff")
+            d_block = fetch_evidence(d_evidence_urls, "Defendant")
+            prompt = (
+                "You are a senior arbitrator reviewing a challenged verdict (Panelist 2).\n\n"
+                "=== DISPUTE ===\n"
+                f"Type: {dispute_type}\n"
+                f"Escrow: {int(escrow_amount)} tokens\n"
+                f"Plaintiff: {plaintiff}\n"
+                f"Defendant: {defendant}\n\n"
+                f"=== CONTRACT ===\n{contract_url}\n\n"
+                f"=== PLAINTIFF EVIDENCE ===\n{p_block}\n\n"
+                f"=== DEFENDANT EVIDENCE ===\n{d_block}\n\n"
+                f"=== ORIGINAL VERDICT ===\n{verdict_raw}\n\n"
+                "=== INSTRUCTIONS ===\n"
+                "Review and decide. Respond ONLY with JSON:\n"
+                '{"agree": true|false, "new_verdict": <full verdict JSON if disagree, else null>, "reason": "<1-3 sentences>"}\n'
+            )
+            return gl.nondet.exec_prompt(prompt)
+
+        def panelist_3() -> str:
+            p_block = fetch_evidence(p_evidence_urls, "Plaintiff")
+            d_block = fetch_evidence(d_evidence_urls, "Defendant")
+            prompt = (
+                "You are a senior arbitrator reviewing a challenged verdict (Panelist 3).\n\n"
+                "=== DISPUTE ===\n"
+                f"Type: {dispute_type}\n"
+                f"Escrow: {int(escrow_amount)} tokens\n"
+                f"Plaintiff: {plaintiff}\n"
+                f"Defendant: {defendant}\n\n"
+                f"=== CONTRACT ===\n{contract_url}\n\n"
+                f"=== PLAINTIFF EVIDENCE ===\n{p_block}\n\n"
+                f"=== DEFENDANT EVIDENCE ===\n{d_block}\n\n"
+                f"=== ORIGINAL VERDICT ===\n{verdict_raw}\n\n"
+                "=== INSTRUCTIONS ===\n"
+                "Review and decide. Respond ONLY with JSON:\n"
+                '{"agree": true|false, "new_verdict": <full verdict JSON if disagree, else null>, "reason": "<1-3 sentences>"}\n'
+            )
+            return gl.nondet.exec_prompt(prompt)
+
+        p1 = gl.eq_principle.strict_eq(panelist_1)
+        p2 = gl.eq_principle.strict_eq(panelist_2)
+        p3 = gl.eq_principle.strict_eq(panelist_3)
+
+        panels = []
+        for i, pj in enumerate([p1, p2, p3], 1):
+            try:
+                cleaned = pj.replace("```json", "").replace("```", "").strip()
+                data = json.loads(cleaned)
+                if not isinstance(data, dict) or "agree" not in data:
+                    return f"INVALID_PANEL_{i}_FORMAT"
+                panels.append(data)
+            except Exception:
+                return f"INVALID_PANEL_{i}_JSON"
+
+        self.dispute_panel_verdicts[dispute_id] = json.dumps(panels, sort_keys=True, separators=(",", ":"))
+
+        agrees = sum(1 for p in panels if p.get("agree") is True)
+        if agrees >= 2:
+            final = original_verdict
+        else:
+            final = None
+            for p in panels:
+                if p.get("agree") is False and p.get("new_verdict") is not None:
+                    final = p["new_verdict"]
+                    break
+            if final is None:
+                final = original_verdict
+
+        self.dispute_verdicts[dispute_id] = json.dumps(final, sort_keys=True, separators=(",", ":"))
+        self.dispute_verdict_confidences[dispute_id] = u256(10)
+        self.dispute_verdict_ats[dispute_id] = u256(0)
+        self.dispute_challenge_deadlines[dispute_id] = u256(0)
+        self.dispute_statuses[dispute_id] = "VERDICT_REACHED"
+        return self.dispute_verdicts[dispute_id]
 
     @gl.public.view
     def get_challenge_status(self, dispute_id: u256) -> str:
